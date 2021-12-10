@@ -604,8 +604,7 @@ renderInteractionModeSelector mode =
                     []
     in
     div []
-        (Html.h4 [] [ Html.text "Interaction Mode" ]
-            :: radio Highlight "Hover"
+        (radio Highlight "Hover"
             ++ radio Line "Line"
             ++ radio Raycast "Raycast"
             ++ radio Ring "Ring"
@@ -623,7 +622,20 @@ view model =
     div [ Html.Attributes.id "app" ]
         [ div [ Html.Attributes.class "controls" ]
             [ div []
-                [ Html.h4 [] [ Html.text "Zoom" ]
+                [ Html.h4 [] [ Html.text "Hex Count" ]
+                , Html.text (Dict.size model.grid |> String.fromInt)
+                ]
+            , div []
+                [ Html.h4 [] [ Html.text "Active Hex" ]
+                , Html.text (HexEngine.Point.toString model.activePoint)
+                ]
+            , div []
+                [ Html.h4 [] [ Html.text "Hover Hex" ]
+                , Html.text (HexEngine.Point.toString model.hoverPoint)
+                ]
+            , Html.details []
+                [ Html.summary [] [ Html.text "Camera" ]
+                , Html.h4 [] [ Html.text "Zoom" ]
                 , Html.input
                     [ Html.Attributes.type_ "range"
                     , Html.Attributes.min "0.06"
@@ -634,50 +646,39 @@ view model =
                     ]
                     []
                 , Html.text (String.fromFloat model.renderConfig.cameraZoom)
-                ]
-            , div []
-                [ Html.h4 [] [ Html.text "Pan X" ]
-                , Html.input
-                    [ Html.Attributes.type_ "range"
-                    , Html.Attributes.min "-1000"
-                    , Html.Attributes.max "1000"
-                    , Html.Attributes.step "0.1"
-                    , Html.Attributes.value <| String.fromFloat model.renderConfig.cameraX
-                    , Html.Events.onInput (\v -> SetRenderConfig (model.renderConfig |> HexEngine.Render.withCameraPositionX (String.toFloat v |> withDefault 0)))
+                , div []
+                    [ Html.h4 [] [ Html.text "Pan X" ]
+                    , Html.input
+                        [ Html.Attributes.type_ "range"
+                        , Html.Attributes.min "-1000"
+                        , Html.Attributes.max "1000"
+                        , Html.Attributes.step "0.1"
+                        , Html.Attributes.value <| String.fromFloat model.renderConfig.cameraX
+                        , Html.Events.onInput (\v -> SetRenderConfig (model.renderConfig |> HexEngine.Render.withCameraPositionX (String.toFloat v |> withDefault 0)))
+                        ]
+                        []
+                    , Html.text (String.fromFloat model.renderConfig.cameraX)
                     ]
-                    []
-                , Html.text (String.fromFloat model.renderConfig.cameraX)
-                ]
-            , div []
-                [ Html.h4 [] [ Html.text "Pan Y" ]
-                , Html.input
-                    [ Html.Attributes.type_ "range"
-                    , Html.Attributes.min "-1000"
-                    , Html.Attributes.max "1000"
-                    , Html.Attributes.step "0.1"
-                    , Html.Attributes.value <| String.fromFloat model.renderConfig.cameraY
-                    , Html.Events.onInput (\v -> SetRenderConfig (model.renderConfig |> HexEngine.Render.withCameraPositionY (String.toFloat v |> withDefault 0)))
+                , div []
+                    [ Html.h4 [] [ Html.text "Pan Y" ]
+                    , Html.input
+                        [ Html.Attributes.type_ "range"
+                        , Html.Attributes.min "-1000"
+                        , Html.Attributes.max "1000"
+                        , Html.Attributes.step "0.1"
+                        , Html.Attributes.value <| String.fromFloat model.renderConfig.cameraY
+                        , Html.Events.onInput (\v -> SetRenderConfig (model.renderConfig |> HexEngine.Render.withCameraPositionY (String.toFloat v |> withDefault 0)))
+                        ]
+                        []
+                    , Html.text (String.fromFloat model.renderConfig.cameraY)
                     ]
-                    []
-                , Html.text (String.fromFloat model.renderConfig.cameraY)
                 ]
-            , div []
-                [ Html.input
-                    [ Html.Attributes.type_ "checkbox"
-                    , Html.Attributes.id "render-debug"
-                    , Html.Attributes.value (Util.boolToString model.renderConfig.debug)
-                    , Html.Events.onInput (\_ -> SetRenderConfig (model.renderConfig |> HexEngine.Render.withDebug (not model.renderConfig.debug)))
-                    ]
-                    []
-                , Html.label [ Html.Attributes.for "render-debug" ] [ Html.text "Render debug mode" ]
-                ]
-            , div []
-                [ Html.h4 [] [ Html.text "Hex orientation" ]
+            , Html.details []
+                [ Html.summary [] [ Html.text "Hex appearance" ]
+                , Html.h4 [] [ Html.text "Hex orientation" ]
                 , Html.button [ Html.Events.onClick (SetHexAppearance (model.hexAppearance |> HexEngine.Render.withOrientation HexEngine.Render.FlatTop)) ] [ Html.text "Flat" ]
                 , Html.button [ Html.Events.onClick (SetHexAppearance (model.hexAppearance |> HexEngine.Render.withOrientation HexEngine.Render.PointyTop)) ] [ Html.text "Pointy" ]
-                ]
-            , div []
-                [ Html.h4 [] [ Html.text "Hex Scale" ]
+                , Html.h4 [] [ Html.text "Hex Scale" ]
                 , Html.input
                     [ Html.Attributes.type_ "range"
                     , Html.Attributes.min "0"
@@ -689,8 +690,8 @@ view model =
                     []
                 , Html.text (String.fromFloat model.hexAppearance.scale)
                 ]
-            , div []
-                [ Html.h4 [] [ Html.text "Map generation" ]
+            , Html.details []
+                [ Html.summary [] [ Html.text "Map generation" ]
                 , Html.label [ Html.Attributes.for "map-gen-size" ] [ Html.text "size" ]
                 , Html.br [] []
                 , Html.input
@@ -751,19 +752,10 @@ view model =
                     ]
                     []
                 ]
-            , div []
-                [ Html.h4 [] [ Html.text "Hex Count" ]
-                , Html.text (Dict.size model.grid |> String.fromInt)
+            , Html.details []
+                [ Html.summary [] [ Html.text "Interaction mode" ]
+                , renderInteractionModeSelector model.interactionMode
                 ]
-            , div []
-                [ Html.h4 [] [ Html.text "Active Hex" ]
-                , Html.text (HexEngine.Point.toString model.activePoint)
-                ]
-            , div []
-                [ Html.h4 [] [ Html.text "Hover Hex" ]
-                , Html.text (HexEngine.Point.toString model.hoverPoint)
-                ]
-            , renderInteractionModeSelector model.interactionMode
             ]
         , div [ Html.Attributes.class "game" ]
             (case model.interactionMode of
