@@ -223,7 +223,7 @@ rayTraceWithCost from to cap cost =
             if remaining > 0 then
                 case cost point of
                     Just c ->
-                        ( remaining - c, point :: fs )
+                        ( remaining - (1 + c), point :: fs )
 
                     Nothing ->
                         ( 0, point :: fs )

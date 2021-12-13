@@ -528,27 +528,28 @@ visionCost : HexGrid TileData -> HexGrid Entity -> Point -> Maybe Int
 visionCost terrain entities point =
     let
         terrainCost =
-            Dict.get point terrain
-                |> Maybe.andThen
-                    (\t ->
-                        case t of
-                            Mountain ->
-                                Nothing
+            case Dict.get point terrain of
+                Just t ->
+                    case t of
+                        Mountain ->
+                            Nothing
 
-                            Woods ->
-                                Just 2
+                        Woods ->
+                            Just 1
 
-                            _ ->
-                                Just 1
-                    )
+                        _ ->
+                            Just 0
+
+                Nothing ->
+                    Just 0
 
         entityCost =
             case Dict.get point entities of
                 Just _ ->
-                    Just 2
+                    Just 1
 
                 _ ->
-                    Just 1
+                    Just 0
     in
     Maybe.map2 max entityCost terrainCost
 
