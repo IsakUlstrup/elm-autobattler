@@ -16,7 +16,6 @@ import Set exposing (Set)
 import Svg exposing (Svg)
 import Svg.Attributes exposing (orientation)
 import Svg.Events
-import Util
 
 
 renderText : HexOrientation -> Point -> List (Svg Msg)
@@ -177,8 +176,38 @@ type TileData
     | Sand
 
 
+tileToString : TileData -> String
+tileToString tile =
+    case tile of
+        Grass ->
+            "Grass"
+
+        Mountain ->
+            "Mountain"
+
+        Water ->
+            "Water"
+
+        ShallowWater ->
+            "Shallw Water"
+
+        Road ->
+            "Road"
+
+        Woods ->
+            "Woods"
+
+        Sand ->
+            "Sand"
+
+
 
 ---- MODEL ----
+
+
+type ActiveHex
+    = Terrain TileData
+    | Entity Entity
 
 
 type InteractionMode
@@ -200,7 +229,7 @@ type alias Model =
     , highlight : HexGrid Highlight
 
     -- , highlightHexes : Set Point
-    , activePoint : Point
+    , activeHex : ( Point, ActiveHex )
     , hoverPoint : Point
     , interactionMode : InteractionMode
     , discoveredTiles : Set Point
@@ -229,7 +258,7 @@ init =
       , highlight = Dict.fromList [ ( ( 0, 0, 0 ), Active ) ]
 
       --   , highlightHexes = Set.fromList []
-      , activePoint = ( 0, 0, 0 )
+      , activeHex = ( ( 0, 0, 0 ), Terrain Grass )
       , hoverPoint = ( 0, 0, 0 )
       , discoveredTiles = Set.singleton ( 0, 0, 0 )
       , visibleTiles = Set.singleton ( 0, 0, 0 )
@@ -261,24 +290,64 @@ update msg model =
             ( { model | hexAppearance = app }, Cmd.none )
 
         ClickHex point ->
-            -- ( { model | activePoint = point, highlightHexes = Set.empty, layers = model.layers |> updateGrid "highlight" [ point ] |> updateGrid "dots" [] }, Cmd.none )
-            ( { model
-                | activePoint = point
+            let
+                ( _, path ) =
+                    HexEngine.Path.path (Tuple.first model.activeHex) point (calculateCost model.grid model.entities)
 
-                -- , highlight = Dict.fromList (List.map hoverHex (model.highlightHexes |> Set.toList)) |> Dict.insert point Active
-                , highlight = Dict.insert point Active model.highlight
-              }
-            , Cmd.none
-            )
+                hex p =
+                    case Dict.get p model.entities of
+                        Just e ->
+                            Entity e
+
+                        Nothing ->
+                            case Dict.get p model.grid of
+                                Just t ->
+                                    Terrain t
+
+                                Nothing ->
+                                    Terrain Grass
+            in
+            case Tuple.second model.activeHex of
+                Entity _ ->
+                    ( { model
+                        | highlight =
+                            Grid.fromPoints (Set.toList path) Dot
+                                |> Dict.insert (Tuple.first model.activeHex) Active
+                                |> Dict.insert point Hover
+                        , entities =
+                            Dict.update (Tuple.first model.activeHex)
+                                (\ent ->
+                                    case ent of
+                                        Just entity ->
+                                            Just (Entity.moveState point entity)
+
+                                        Nothing ->
+                                            ent
+                                )
+                                model.entities
+                        , activeHex = ( Tuple.first model.activeHex, hex (Tuple.first model.activeHex) )
+                      }
+                    , Cmd.none
+                    )
+
+                Terrain _ ->
+                    ( { model
+                        | activeHex = ( point, hex point )
+
+                        -- , highlight = Dict.fromList (List.map hoverHex (model.highlightHexes |> Set.toList)) |> Dict.insert point Active
+                        , highlight = Dict.singleton point Active
+                      }
+                    , Cmd.none
+                    )
 
         HoverHex point ->
             case model.interactionMode of
                 Line ->
-                    -- ( { model | hoverPoint = point, highlightHexes = HexGrid.line model.activePoint point |> Set.fromList }, Cmd.none )
+                    -- ( { model | hoverPoint = point, highlightHexes = HexGrid.line model.activeHex point |> Set.fromList }, Cmd.none )
                     ( { model
                         | hoverPoint = point
                         , highlight =
-                            Grid.fromPoints (Grid.line model.activePoint point) Dot
+                            Grid.fromPoints (Grid.line (Tuple.first model.activeHex) point) Dot
                       }
                     , Cmd.none
                     )
@@ -287,10 +356,10 @@ update msg model =
                     ( { model
                         | hoverPoint = point
 
-                        -- , highlightHexes = Grid.rayTrace model.activePoint point (obstacles model.grid)
+                        -- , highlightHexes = Grid.rayTrace model.activeHex point (obstacles model.grid)
                         , highlight =
                             Grid.fromPoints
-                                (Grid.rayTrace model.activePoint point (obstacles model.grid) |> Set.toList)
+                                (Grid.rayTrace (Tuple.first model.activeHex) point (obstacles model.grid) |> Set.toList)
                                 Dot
                       }
                     , Cmd.none
@@ -300,9 +369,9 @@ update msg model =
                     ( { model
                         | hoverPoint = point
 
-                        -- , highlightHexes = Grid.ring (Grid.distance point model.activePoint) model.activePoint
+                        -- , highlightHexes = Grid.ring (Grid.distance point model.activeHex) model.activeHex
                         , highlight =
-                            Grid.fromPoints (Grid.ring (Grid.distance point model.activePoint) model.activePoint |> Set.toList) Overlay
+                            Grid.fromPoints (Grid.ring (Grid.distance point (Tuple.first model.activeHex)) (Tuple.first model.activeHex) |> Set.toList) Overlay
                       }
                     , Cmd.none
                     )
@@ -335,12 +404,7 @@ update msg model =
                 Highlight ->
                     -- ( { model | hoverPoint = point, layers = updateGrid "highlight" [ point ] model.layers }, Cmd.none )
                     ( { model
-                        | highlight =
-                            Dict.fromList
-                                [ ( point, Hover )
-                                , ( model.activePoint, Active )
-                                ]
-                        , hoverPoint = point
+                        | hoverPoint = point
 
                         -- , highlightHexes = Set.singleton point
                       }
@@ -350,15 +414,15 @@ update msg model =
                 Path ->
                     let
                         ( _, path ) =
-                            HexEngine.Path.path model.activePoint point (calculateCost model.grid model.entities)
+                            HexEngine.Path.path (Tuple.first model.activeHex) point (calculateCost model.grid model.entities)
                     in
                     ( { model
                         | hoverPoint = point
 
-                        -- , highlightHexes = HexEngine.Path.path model.activePoint point (calculateCost model.grid model.entities) |> Tuple.second
+                        -- , highlightHexes = HexEngine.Path.path model.activeHex point (calculateCost model.grid model.entities) |> Tuple.second
                         , highlight =
                             Grid.fromPoints (Set.toList path) Overlay
-                                |> Dict.insert model.activePoint Active
+                                |> Dict.insert (Tuple.first model.activeHex) Active
                                 |> Dict.insert point Hover
 
                         -- |> Dict.union
@@ -419,7 +483,7 @@ update msg model =
                 _ ->
                     ( { model
                         | interactionMode = mode
-                        , highlight = Dict.fromList [ ( model.activePoint, Active ), ( model.hoverPoint, Hover ) ]
+                        , highlight = Dict.fromList [ ( Tuple.first model.activeHex, Active ), ( model.hoverPoint, Hover ) ]
                       }
                     , Cmd.none
                     )
@@ -430,7 +494,7 @@ update msg model =
                 , grid = GridGen.randomHexMap config tileType |> Dict.insert ( 0, 0, 0 ) Grass
                 , highlight = Dict.empty
                 , hoverPoint = ( 0, 0, 0 )
-                , activePoint = ( 0, 0, 0 )
+                , activeHex = ( ( 0, 0, 0 ), Terrain Grass )
                 , visibleTiles = Set.singleton ( 0, 0, 0 )
                 , discoveredTiles = Set.singleton ( 0, 0, 0 )
               }
@@ -618,6 +682,25 @@ renderInteractionModeSelector mode =
         )
 
 
+renderActiveHex : ( Point, ActiveHex ) -> Html Msg
+renderActiveHex ( point, hex ) =
+    let
+        hexElem =
+            case hex of
+                Terrain t ->
+                    Html.text ("terrain: " ++ tileToString t)
+
+                Entity e ->
+                    Html.text ("entity: " ++ Entity.toString e)
+    in
+    div []
+        [ Html.h4 [] [ Html.text "Active Hex" ]
+        , Html.text (HexEngine.Point.toString point)
+        , Html.br [] []
+        , hexElem
+        ]
+
+
 view : Model -> Html Msg
 view model =
     div [ Html.Attributes.id "app" ]
@@ -626,10 +709,7 @@ view model =
                 [ Html.h4 [] [ Html.text "Hex Count" ]
                 , Html.text (Dict.size model.grid |> String.fromInt)
                 ]
-            , div []
-                [ Html.h4 [] [ Html.text "Active Hex" ]
-                , Html.text (HexEngine.Point.toString model.activePoint)
-                ]
+            , renderActiveHex model.activeHex
             , div []
                 [ Html.h4 [] [ Html.text "Hover Hex" ]
                 , Html.text (HexEngine.Point.toString model.hoverPoint)
