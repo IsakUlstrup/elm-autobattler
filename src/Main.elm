@@ -217,7 +217,6 @@ type InteractionMode
     | Vision Int
     | Ring
     | Path
-    | EntityVision
 
 
 type alias Model =
@@ -226,9 +225,6 @@ type alias Model =
     , mapGenConfig : GridGen.MapGenerationConfig
     , grid : HexGrid TileData
     , entities : HexGrid Entity
-    , highlight : HexGrid Highlight
-
-    -- , highlightHexes : Set Point
     , activeHex : ( Point, ActiveHex )
     , hoverPoint : Point
     , interactionMode : InteractionMode
@@ -255,9 +251,6 @@ init =
                 , ( ( -5, 5, 0 ), Entity.new False )
                 , ( ( 5, -5, 0 ), Entity.new True )
                 ]
-      , highlight = Dict.fromList [ ( ( 0, 0, 0 ), Active ) ]
-
-      --   , highlightHexes = Set.fromList []
       , activeHex = ( ( 0, 0, 0 ), Terrain Grass )
       , hoverPoint = ( 0, 0, 0 )
       , discoveredTiles = Set.singleton ( 0, 0, 0 )
@@ -291,9 +284,6 @@ update msg model =
 
         ClickHex point ->
             let
-                ( _, path ) =
-                    HexEngine.Path.path (Tuple.first model.activeHex) point (calculateCost model.grid model.entities)
-
                 hex p =
                     case Dict.get p model.entities of
                         Just e ->
@@ -307,192 +297,37 @@ update msg model =
                                 Nothing ->
                                     Terrain Grass
             in
-            case Tuple.second model.activeHex of
-                Entity _ ->
-                    ( { model
-                        | highlight =
-                            Grid.fromPoints (Set.toList path) Dot
-                                |> Dict.insert (Tuple.first model.activeHex) Active
-                                |> Dict.insert point Hover
-                        , entities =
-                            Dict.update (Tuple.first model.activeHex)
-                                (\ent ->
-                                    case ent of
-                                        Just entity ->
-                                            Just (Entity.moveState point entity)
-
-                                        Nothing ->
-                                            ent
-                                )
-                                model.entities
-                        , activeHex = ( Tuple.first model.activeHex, hex (Tuple.first model.activeHex) )
-                      }
-                    , Cmd.none
-                    )
-
-                Terrain _ ->
-                    ( { model
-                        | activeHex = ( point, hex point )
-
-                        -- , highlight = Dict.fromList (List.map hoverHex (model.highlightHexes |> Set.toList)) |> Dict.insert point Active
-                        , highlight = Dict.singleton point Active
-                      }
-                    , Cmd.none
-                    )
+            ( { model | activeHex = ( point, hex point ) }, Cmd.none )
 
         HoverHex point ->
             case model.interactionMode of
-                Line ->
-                    -- ( { model | hoverPoint = point, highlightHexes = HexGrid.line model.activeHex point |> Set.fromList }, Cmd.none )
-                    ( { model
-                        | hoverPoint = point
-                        , highlight =
-                            Grid.fromPoints (Grid.line (Tuple.first model.activeHex) point) Dot
-                      }
-                    , Cmd.none
-                    )
-
-                Raycast ->
-                    ( { model
-                        | hoverPoint = point
-
-                        -- , highlightHexes = Grid.rayTrace model.activeHex point (obstacles model.grid)
-                        , highlight =
-                            Grid.fromPoints
-                                (Grid.rayTrace (Tuple.first model.activeHex) point (obstacles model.grid) |> Set.toList)
-                                Dot
-                      }
-                    , Cmd.none
-                    )
-
-                Ring ->
-                    ( { model
-                        | hoverPoint = point
-
-                        -- , highlightHexes = Grid.ring (Grid.distance point model.activeHex) model.activeHex
-                        , highlight =
-                            Grid.fromPoints (Grid.ring (Grid.distance point (Tuple.first model.activeHex)) (Tuple.first model.activeHex) |> Set.toList) Overlay
-                      }
-                    , Cmd.none
-                    )
-
                 Vision range ->
                     let
                         visible =
                             Grid.fieldOfVisionWithCost range point (visionCost model.grid model.entities)
-
-                        discovered =
-                            Set.union model.discoveredTiles visible
                     in
                     ( { model
-                        | hoverPoint = ( 0, 0, 0 )
-
-                        -- , highlightHexes = discovered
-                        , discoveredTiles = discovered
+                        | hoverPoint = point
                         , visibleTiles = visible
-                        , highlight =
-                            -- Grid.fromPoints (visible |> Set.toList) Overlay
-                            Dict.diff
-                                (Dict.filter (\p _ -> Set.member p model.discoveredTiles) model.grid)
-                                (Grid.fromPoints (visible |> Set.toList) Overlay)
-                                |> Dict.keys
-                                |> (\ps -> Grid.fromPoints ps Fog)
+                        , discoveredTiles = Set.union model.discoveredTiles visible
                       }
                     , Cmd.none
                     )
-
-                Highlight ->
-                    -- ( { model | hoverPoint = point, layers = updateGrid "highlight" [ point ] model.layers }, Cmd.none )
-                    ( { model
-                        | hoverPoint = point
-
-                        -- , highlightHexes = Set.singleton point
-                      }
-                    , Cmd.none
-                    )
-
-                Path ->
-                    let
-                        ( _, path ) =
-                            HexEngine.Path.path (Tuple.first model.activeHex) point (calculateCost model.grid model.entities)
-                    in
-                    ( { model
-                        | hoverPoint = point
-
-                        -- , highlightHexes = HexEngine.Path.path model.activeHex point (calculateCost model.grid model.entities) |> Tuple.second
-                        , highlight =
-                            Grid.fromPoints (Set.toList path) Overlay
-                                |> Dict.insert (Tuple.first model.activeHex) Active
-                                |> Dict.insert point Hover
-
-                        -- |> Dict.union
-                        --     (Grid.fromPoints (Set.toList path) Overlay)
-                      }
-                    , Cmd.none
-                    )
-
-                EntityVision ->
-                    let
-                        playerPositions =
-                            model.entities
-                                |> Dict.toList
-                                |> List.filterMap
-                                    (\( p, e ) ->
-                                        if e.player then
-                                            Just p
-
-                                        else
-                                            Nothing
-                                    )
-
-                        fieldOfVision p =
-                            Grid.fieldOfVision 5 p (obstacles model.grid) |> Set.toList
-
-                        combinedVision =
-                            List.concatMap fieldOfVision playerPositions
-                    in
-                    ( { model | highlight = Grid.fromPoints combinedVision Overlay }, Cmd.none )
-
-        SetInteractionMode mode ->
-            case mode of
-                EntityVision ->
-                    let
-                        playerPositions =
-                            model.entities
-                                |> Dict.toList
-                                |> List.filterMap
-                                    (\( p, e ) ->
-                                        if e.player then
-                                            Just p
-
-                                        else
-                                            Nothing
-                                    )
-
-                        fieldOfVision p =
-                            Grid.fieldOfVision 5 p (obstacles model.grid) |> Set.toList
-
-                        combinedVision =
-                            List.concatMap fieldOfVision playerPositions
-
-                        highlightHex3 p =
-                            ( p, Overlay )
-                    in
-                    ( { model | highlight = List.map highlightHex3 combinedVision |> Dict.fromList, interactionMode = EntityVision }, Cmd.none )
 
                 _ ->
-                    ( { model
-                        | interactionMode = mode
-                        , highlight = Dict.fromList [ ( Tuple.first model.activeHex, Active ), ( model.hoverPoint, Hover ) ]
-                      }
-                    , Cmd.none
-                    )
+                    ( { model | hoverPoint = point }, Cmd.none )
+
+        SetInteractionMode mode ->
+            ( { model
+                | interactionMode = mode
+              }
+            , Cmd.none
+            )
 
         SetMapGenConfig config ->
             ( { model
                 | mapGenConfig = config
                 , grid = GridGen.randomHexMap config tileType |> Dict.insert ( 0, 0, 0 ) Grass
-                , highlight = Dict.empty
                 , hoverPoint = ( 0, 0, 0 )
                 , activeHex = ( ( 0, 0, 0 ), Terrain Grass )
                 , visibleTiles = Set.singleton ( 0, 0, 0 )
@@ -675,7 +510,6 @@ renderInteractionModeSelector mode =
             ++ radio Ring "Ring"
             ++ radio (Vision 4) "Vision"
             ++ radio Path "Path"
-            ++ radio EntityVision "Entity Vision"
             ++ (Html.br [] []
                     :: options mode
                )
@@ -703,6 +537,46 @@ renderActiveHex ( point, hex ) =
 
 view : Model -> Html Msg
 view model =
+    let
+        highlight =
+            (case model.interactionMode of
+                Line ->
+                    Grid.fromPoints (Grid.line (Tuple.first model.activeHex) model.hoverPoint) Dot
+
+                Raycast ->
+                    Grid.fromPoints
+                        (Grid.rayTrace (Tuple.first model.activeHex) model.hoverPoint (obstacles model.grid) |> Set.toList)
+                        Dot
+
+                Ring ->
+                    Grid.fromPoints
+                        (Grid.ring (Grid.distance model.hoverPoint (Tuple.first model.activeHex)) (Tuple.first model.activeHex) |> Set.toList)
+                        Overlay
+
+                Vision range ->
+                    let
+                        visible =
+                            Grid.fieldOfVisionWithCost range model.hoverPoint (visionCost model.grid model.entities)
+                    in
+                    Dict.diff
+                        (Dict.filter (\p _ -> Set.member p model.discoveredTiles) model.grid)
+                        (Grid.fromPoints (visible |> Set.toList) Overlay)
+                        |> Dict.keys
+                        |> (\ps -> Grid.fromPoints ps Fog)
+
+                Path ->
+                    let
+                        ( explored, path ) =
+                            HexEngine.Path.path (Tuple.first model.activeHex) model.hoverPoint (calculateCost model.grid model.entities)
+                    in
+                    Grid.fromPoints (Set.toList explored) Overlay
+                        |> Dict.union (Grid.fromPoints (Set.toList path) Dot)
+
+                _ ->
+                    Dict.empty
+            )
+                |> Dict.insert (Tuple.first model.activeHex) Active
+    in
     div [ Html.Attributes.id "app" ]
         [ div [ Html.Attributes.class "controls" ]
             [ div []
@@ -847,7 +721,7 @@ view model =
                         ( model.grid, Just model.discoveredTiles, simpleHex )
                         ( model.grid, Just model.discoveredTiles, hexIcon )
                         ( model.entities, Just model.visibleTiles, renderEntity )
-                        ( model.highlight, Nothing, highlightHex )
+                        ( highlight, Nothing, highlightHex )
                     ]
 
                 _ ->
@@ -857,7 +731,7 @@ view model =
                         ( model.grid, Nothing, simpleHex )
                         ( model.grid, Nothing, hexIcon )
                         ( model.entities, Nothing, renderEntity )
-                        ( model.highlight, Nothing, highlightHex )
+                        ( highlight, Nothing, highlightHex )
                     ]
             )
         ]
