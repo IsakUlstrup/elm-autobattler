@@ -106,22 +106,6 @@ debugHex _ _ ( point, tile ) =
     Render.text (HexEngine.Point.toString point) []
 
 
-renderEntity : HexGrid Entity -> HexOrientation -> ( Point, Entity ) -> Svg Msg
-renderEntity _ _ ( point, entity ) =
-    let
-        svgText =
-            if entity.player then
-                "🐼"
-
-            else
-                "🦄"
-    in
-    Render.text svgText
-        [ Svg.Attributes.fontSize "55pt"
-        , Svg.Attributes.pointerEvents "none"
-        ]
-
-
 highlightHex : HexGrid Highlight -> HexOrientation -> ( Point, Highlight ) -> Svg Msg
 highlightHex _ orientation ( point, highlight ) =
     let
@@ -254,7 +238,7 @@ init =
       , grid = GridGen.randomHexMap mapGenConfig tileType |> Dict.insert ( 0, 0, 0 ) Grass
       , entities =
             Dict.fromList
-                [ ( ( 0, -1, 1 ), Entity.new True )
+                [ ( ( 0, -1, 1 ), Entity.new True |> Entity.moveState ( 2, -2, 0 ) )
                 , ( ( -1, 1, 0 ), Entity.new False )
                 , ( ( -5, 5, 0 ), Entity.new False )
                 , ( ( 5, -5, 0 ), Entity.new True )
@@ -365,6 +349,12 @@ update msg model =
 
                         'd' ->
                             ( { model | renderConfig = model.renderConfig |> Render.withCameraMovementX movementSpeed }, Cmd.none )
+
+                        '+' ->
+                            ( { model | renderConfig = model.renderConfig |> Render.withCameraZoomIn 0.1 }, Cmd.none )
+
+                        '-' ->
+                            ( { model | renderConfig = model.renderConfig |> Render.withCameraZoomOut 0.1 }, Cmd.none )
 
                         'p' ->
                             ( { model | showSidepanel = not model.showSidepanel }, Cmd.none )
@@ -773,7 +763,7 @@ view model =
                         model.hexAppearance
                         ( model.grid, Just model.discoveredTiles, simpleHex )
                         ( model.grid, Just model.discoveredTiles, hexIcon )
-                        ( model.entities, Just model.visibleTiles, renderEntity )
+                        ( model.entities, Just model.visibleTiles, Entity.render )
                         ( highlight, Nothing, highlightHex )
                     ]
 
@@ -783,7 +773,7 @@ view model =
                         model.hexAppearance
                         ( model.grid, Nothing, simpleHex )
                         ( model.grid, Nothing, hexIcon )
-                        ( model.entities, Nothing, renderEntity )
+                        ( model.entities, Nothing, Entity.render )
                         ( highlight, Nothing, highlightHex )
                     ]
             )

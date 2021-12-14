@@ -22,6 +22,8 @@ module HexEngine.Render exposing
     , withCameraPositionX
     , withCameraPositionY
     , withCameraZoom
+    , withCameraZoomIn
+    , withCameraZoomOut
     , withDebug
     , withOrientation
     , withScale
@@ -127,6 +129,16 @@ withCameraMovementX amount config =
 withCameraMovementY : Float -> RenderConfig -> RenderConfig
 withCameraMovementY amount config =
     { config | cameraY = config.cameraY + amount }
+
+
+withCameraZoomIn : Float -> RenderConfig -> RenderConfig
+withCameraZoomIn amount config =
+    { config | cameraZoom = config.cameraZoom + amount }
+
+
+withCameraZoomOut : Float -> RenderConfig -> RenderConfig
+withCameraZoomOut amount config =
+    { config | cameraZoom = config.cameraZoom - amount }
 
 
 
