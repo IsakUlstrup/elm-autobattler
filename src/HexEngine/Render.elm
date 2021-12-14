@@ -17,6 +17,8 @@ module HexEngine.Render exposing
     , renderLayers
     , text
     , trimDashArrayStart
+    , withCameraMovementX
+    , withCameraMovementY
     , withCameraPositionX
     , withCameraPositionY
     , withCameraZoom
@@ -115,6 +117,16 @@ withCameraPositionY y config =
 withCameraZoom : Float -> RenderConfig -> RenderConfig
 withCameraZoom zoomMultiplier config =
     { config | cameraZoom = zoomMultiplier }
+
+
+withCameraMovementX : Float -> RenderConfig -> RenderConfig
+withCameraMovementX amount config =
+    { config | cameraX = config.cameraX + amount }
+
+
+withCameraMovementY : Float -> RenderConfig -> RenderConfig
+withCameraMovementY amount config =
+    { config | cameraY = config.cameraY + amount }
 
 
 
