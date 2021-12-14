@@ -544,9 +544,14 @@ view model =
                     Grid.fromPoints (Grid.line (Tuple.first model.activeHex) model.hoverPoint) Dot
 
                 Raycast ->
+                    let
+                        ( hit, ray ) =
+                            Grid.rayTrace (Tuple.first model.activeHex) model.hoverPoint (obstacles model.grid)
+                    in
                     Grid.fromPoints
-                        (Grid.rayTrace (Tuple.first model.activeHex) model.hoverPoint (obstacles model.grid) |> Set.toList)
+                        (ray |> Set.toList)
                         Dot
+                        |> Dict.insert hit Overlay
 
                 Ring ->
                     Grid.fromPoints

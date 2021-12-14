@@ -185,29 +185,30 @@ line from to =
 
 {-| Get a line between two points, but stop at any obstacles
 -}
-rayTrace : Point -> Point -> Set Point -> Set Point
+rayTrace : Point -> Point -> Set Point -> ( Point, Set Point )
 rayTrace from to obstacles =
     let
         ray =
             line from to
 
-        visibleAcum point ( hitWall, fs ) =
+        visibleAcum : Point -> ( Bool, Point, List Point ) -> ( Bool, Point, List Point )
+        visibleAcum point ( hitWall, hit, path ) =
             -- obstacle hit, return visible
             if hitWall then
-                ( True, fs )
+                ( True, hit, path )
                 -- obstacle hit, add obstacle to visible
 
             else if Set.member point obstacles then
-                ( True, point :: fs )
+                ( True, point, point :: path )
                 -- obstacle not hit, add point to visible and continue
 
             else
-                ( False, point :: fs )
+                ( False, point, point :: path )
 
-        ( _, visible ) =
-            List.foldl visibleAcum ( False, [] ) ray
+        ( _, hitPoint, visible ) =
+            List.foldl visibleAcum ( False, from, [] ) ray
     in
-    Set.union Set.empty (visible |> Set.fromList)
+    ( hitPoint, Set.union Set.empty (visible |> Set.fromList) )
 
 
 {-| Get a line between two points, with cost for passing through tiles
@@ -245,7 +246,7 @@ fieldOfVision radius point obstacles =
         ringPoints =
             ring radius point
                 |> Set.toList
-                |> List.map (\p -> rayTrace point p obstacles)
+                |> List.map (\p -> rayTrace point p obstacles |> Tuple.second)
     in
     List.foldl Set.union Set.empty ringPoints
 
