@@ -33,12 +33,12 @@ tracePathBack targetNode currentPath =
 The movementCost function should return a Float representing how hard a certain point is to traverse, Nothing is the Point is not traversable
 Returns explored points and path to point
 -}
-path : Point -> Point -> (Point -> Maybe Float) -> ( Set Point, Set Point )
+path : Point -> Point -> (Point -> Maybe Float) -> ( Set Point, List Point )
 path from to movementCost =
     case movementCost to of
         Nothing ->
             -- ( Set.empty, Set.empty ) |> Debug.log ("invalid target" ++ HexEngine.Point.toString to)
-            ( Set.empty, Set.empty )
+            ( Set.empty, [] )
 
         Just _ ->
             let
@@ -61,11 +61,11 @@ path from to movementCost =
             case targetNode of
                 Just node ->
                     ( List.map (\n -> n.point) exploredNodes |> Set.fromList
-                    , tracePathBack node [ node.point ] |> Set.fromList
+                    , tracePathBack node [ node.point ] |> List.drop 1
                     )
 
                 Nothing ->
-                    ( Set.empty, Set.empty )
+                    ( Set.empty, [] )
 
 
 lowerCostNode : List PathNode -> PathNode -> Maybe PathNode

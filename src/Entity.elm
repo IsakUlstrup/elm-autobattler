@@ -1,6 +1,15 @@
-module Entity exposing (Entity, EntityState, moveState, new, render, toString)
+module Entity exposing
+    ( Entity
+    , EntityState(..)
+    , idleState
+    , isPlayer
+    , moveState
+    , new
+    , render
+    , toString
+    )
 
-import HexEngine.Grid as Grid exposing (HexGrid)
+import HexEngine.Grid exposing (HexGrid)
 import HexEngine.Point as Point exposing (Point)
 import HexEngine.Render as Render exposing (HexOrientation)
 import Svg exposing (Svg)
@@ -16,18 +25,29 @@ type EntityState
 type alias Entity =
     { player : Bool
     , health : ( Int, Int )
+    , perception : Int
     , state : EntityState
     }
 
 
 new : Bool -> Entity
 new player =
-    Entity player ( 100, 100 ) Idle
+    Entity player ( 100, 100 ) 5 Idle
 
 
 moveState : Point -> Entity -> Entity
 moveState to entity =
     { entity | state = Moving to }
+
+
+idleState : Entity -> Entity
+idleState entity =
+    { entity | state = Idle }
+
+
+isPlayer : ( Point, Entity ) -> Bool
+isPlayer ( _, e ) =
+    e.player
 
 
 toString : Entity -> String

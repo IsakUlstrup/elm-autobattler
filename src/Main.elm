@@ -3,7 +3,7 @@ module Main exposing (..)
 import Browser
 import Browser.Events
 import Dict
-import Entity exposing (Entity)
+import Entity exposing (Entity, EntityState(..))
 import HexEngine.Grid as Grid exposing (HexGrid)
 import HexEngine.GridGenerator as GridGen exposing (MapGenerationConfig)
 import HexEngine.Path
@@ -208,6 +208,7 @@ type InteractionMode
     | Vision Int
     | Ring
     | Path
+    | Game
 
 
 type alias Model =
@@ -222,6 +223,7 @@ type alias Model =
     , discoveredTiles : Set Point
     , visibleTiles : Set Point
     , showSidepanel : Bool
+    , tickCooldown : Float
     }
 
 
@@ -248,6 +250,7 @@ init =
       , discoveredTiles = Set.singleton ( 0, 0, 0 )
       , visibleTiles = Set.singleton ( 0, 0, 0 )
       , showSidepanel = True
+      , tickCooldown = 0
       }
     , Cmd.none
     )
@@ -265,6 +268,22 @@ type Msg
     | SetInteractionMode InteractionMode
     | SetMapGenConfig MapGenerationConfig
     | KeyInput Key
+    | Tick Float
+
+
+getHex : Point -> HexGrid Entity -> HexGrid TileData -> ActiveHex
+getHex point entities terrain =
+    case Dict.get point entities of
+        Just e ->
+            Entity e
+
+        Nothing ->
+            case Dict.get point terrain of
+                Just t ->
+                    Terrain t
+
+                Nothing ->
+                    Terrain Grass
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -277,21 +296,38 @@ update msg model =
             ( { model | hexAppearance = app }, Cmd.none )
 
         ClickHex point ->
-            let
-                hex p =
-                    case Dict.get p model.entities of
-                        Just e ->
-                            Entity e
+            case model.interactionMode of
+                Game ->
+                    -- This is horrible, but kinda works, will fix later
+                    -- set new entity destination
+                    case model.activeHex of
+                        ( p, Entity e ) ->
+                            if e.player then
+                                ( { model
+                                    | entities =
+                                        Dict.update p
+                                            (\me ->
+                                                case me of
+                                                    Just entity ->
+                                                        Just (Entity.moveState point entity)
 
-                        Nothing ->
-                            case Dict.get p model.grid of
-                                Just t ->
-                                    Terrain t
+                                                    Nothing ->
+                                                        me
+                                            )
+                                            model.entities
+                                    , activeHex = ( point, getHex point model.entities model.grid )
+                                  }
+                                , Cmd.none
+                                )
 
-                                Nothing ->
-                                    Terrain Grass
-            in
-            ( { model | activeHex = ( point, hex point ) }, Cmd.none )
+                            else
+                                ( { model | activeHex = ( point, getHex point model.entities model.grid ) }, Cmd.none )
+
+                        ( _, Terrain _ ) ->
+                            ( { model | activeHex = ( point, getHex point model.entities model.grid ) }, Cmd.none )
+
+                _ ->
+                    ( { model | activeHex = ( point, getHex point model.entities model.grid ) }, Cmd.none )
 
         HoverHex point ->
             case model.interactionMode of
@@ -304,6 +340,13 @@ update msg model =
                         | hoverPoint = point
                         , visibleTiles = visible
                         , discoveredTiles = Set.union model.discoveredTiles visible
+                      }
+                    , Cmd.none
+                    )
+
+                Game ->
+                    ( { model
+                        | hoverPoint = point
                       }
                     , Cmd.none
                     )
@@ -364,6 +407,75 @@ update msg model =
 
                 _ ->
                     ( model, Cmd.none )
+
+        Tick dt ->
+            let
+                entityVision : HexGrid TileData -> HexGrid Entity -> ( Point, Entity ) -> Set Point
+                entityVision terrain entities ( p, e ) =
+                    Grid.fieldOfVisionWithCost e.perception p (visionCost terrain entities)
+
+                moveEntities : HexGrid TileData -> HexGrid Entity -> HexGrid Entity
+                moveEntities grid entities =
+                    Dict.toList entities
+                        |> List.map
+                            (\( p, e ) ->
+                                case e.state of
+                                    Moving to ->
+                                        if p == to then
+                                            ( p, Entity.idleState e )
+
+                                        else
+                                            let
+                                                newPos =
+                                                    HexEngine.Path.path p to (calculateCost grid entities)
+                                                        |> Tuple.second
+                                                        -- |> Debug.log "path"
+                                                        |> List.head
+                                                        |> Maybe.withDefault p
+                                            in
+                                            if newPos == to then
+                                                ( newPos
+                                                , Entity.idleState e
+                                                )
+
+                                            else
+                                                ( newPos
+                                                , e
+                                                )
+
+                                    _ ->
+                                        ( p, e )
+                            )
+                        |> Dict.fromList
+
+                combinedVision terrain entities =
+                    Dict.toList entities
+                        |> List.filter Entity.isPlayer
+                        |> List.map (entityVision terrain entities)
+                        |> List.foldl Set.union Set.empty
+
+                newTickCooldown =
+                    max 0 (model.tickCooldown - dt)
+            in
+            if newTickCooldown == 0 then
+                let
+                    entities =
+                        moveEntities model.grid model.entities
+
+                    visible =
+                        combinedVision model.grid entities
+                in
+                ( { model
+                    | entities = entities
+                    , visibleTiles = visible
+                    , discoveredTiles = Set.union model.discoveredTiles visible
+                    , tickCooldown = 500
+                  }
+                , Cmd.none
+                )
+
+            else
+                ( { model | tickCooldown = newTickCooldown }, Cmd.none )
 
 
 
@@ -539,6 +651,7 @@ renderInteractionModeSelector mode =
             ++ radio Ring "Ring"
             ++ radio (Vision 4) "Vision"
             ++ radio Path "Path"
+            ++ radio Game "Game"
             ++ (Html.br [] []
                     :: options mode
                )
@@ -730,11 +843,13 @@ view model =
                         visible =
                             Grid.fieldOfVisionWithCost range model.hoverPoint (visionCost model.grid model.entities)
                     in
-                    Dict.diff
-                        (Dict.filter (\p _ -> Set.member p model.discoveredTiles) model.grid)
-                        (Grid.fromPoints (visible |> Set.toList) Overlay)
-                        |> Dict.keys
-                        |> (\ps -> Grid.fromPoints ps Fog)
+                    -- Dict.diff
+                    --     (Dict.filter (\p _ -> Set.member p model.discoveredTiles) model.grid)
+                    --     (Grid.fromPoints (visible |> Set.toList) Overlay)
+                    --     |> Dict.keys
+                    --     |> (\ps -> Grid.fromPoints ps Fog)
+                    Grid.fromPoints (Set.toList model.discoveredTiles) Overlay
+                        |> Dict.union (Grid.fromPoints (Set.toList visible) Dot)
 
                 Path ->
                     let
@@ -742,7 +857,14 @@ view model =
                             HexEngine.Path.path (Tuple.first model.activeHex) model.hoverPoint (calculateCost model.grid model.entities)
                     in
                     Grid.fromPoints (Set.toList explored) Overlay
-                        |> Dict.union (Grid.fromPoints (Set.toList path) Dot)
+                        |> Dict.union (Grid.fromPoints path Dot)
+
+                Game ->
+                    Dict.diff
+                        (Dict.filter (\p _ -> Set.member p model.discoveredTiles) model.grid)
+                        (Grid.fromPoints (model.visibleTiles |> Set.toList) Overlay)
+                        |> Dict.keys
+                        |> (\ps -> Grid.fromPoints ps Fog)
 
                 _ ->
                     Dict.empty
@@ -757,7 +879,7 @@ view model =
             Html.div [] []
         , div [ Html.Attributes.class "game" ]
             (case model.interactionMode of
-                Vision _ ->
+                Game ->
                     [ Render.render4
                         model.renderConfig
                         model.hexAppearance
@@ -800,8 +922,16 @@ keyDecoder =
 
 
 subs : Model -> Sub Msg
-subs _ =
-    Browser.Events.onKeyDown keyDecoder
+subs model =
+    case model.interactionMode of
+        Game ->
+            Sub.batch
+                [ Browser.Events.onKeyDown keyDecoder
+                , Browser.Events.onAnimationFrameDelta Tick
+                ]
+
+        _ ->
+            Browser.Events.onKeyDown keyDecoder
 
 
 
