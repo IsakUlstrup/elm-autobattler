@@ -419,18 +419,28 @@ renderLayer2 app grid whitelist render =
                                 ( hexCenterX, hexCenterY ) =
                                     pointToPixel app.orientation point
 
-                                transformAttr =
-                                    SvgAttr.transform
-                                        ("translate("
-                                            ++ String.fromFloat hexCenterX
-                                            ++ ", "
-                                            ++ String.fromFloat hexCenterY
-                                            ++ ") scale("
+                                -- transformAttr =
+                                --     SvgAttr.transform
+                                --         ("translate("
+                                --             ++ String.fromFloat hexCenterX
+                                --             ++ ", "
+                                --             ++ String.fromFloat hexCenterY
+                                --             ++ ") scale("
+                                --             ++ String.fromFloat app.scale
+                                --             ++ ")"
+                                --         )
+                                cssTransform =
+                                    SvgAttr.style
+                                        ("transform: translate("
+                                            ++ (hexCenterX |> String.fromFloat)
+                                            ++ "px, "
+                                            ++ (hexCenterY |> String.fromFloat)
+                                            ++ "px) scale("
                                             ++ String.fromFloat app.scale
                                             ++ ")"
                                         )
                             in
-                            Just (Svg.g [ transformAttr ] [ render grid app.orientation ( point, tile ) ])
+                            Just (Svg.g [ cssTransform ] [ render grid app.orientation ( point, tile ) ])
 
                         Just wl ->
                             if Set.member point wl then
@@ -438,18 +448,28 @@ renderLayer2 app grid whitelist render =
                                     ( hexCenterX, hexCenterY ) =
                                         pointToPixel app.orientation point
 
-                                    transformAttr =
-                                        SvgAttr.transform
-                                            ("translate("
-                                                ++ String.fromFloat hexCenterX
-                                                ++ ", "
-                                                ++ String.fromFloat hexCenterY
-                                                ++ ") scale("
+                                    -- transformAttr =
+                                    --     SvgAttr.transform
+                                    --         ("translate("
+                                    --             ++ String.fromFloat hexCenterX
+                                    --             ++ ", "
+                                    --             ++ String.fromFloat hexCenterY
+                                    --             ++ ") scale("
+                                    --             ++ String.fromFloat app.scale
+                                    --             ++ ") "
+                                    --         )
+                                    cssTransform =
+                                        SvgAttr.style
+                                            ("transform: translate("
+                                                ++ (hexCenterX |> String.fromFloat)
+                                                ++ "px, "
+                                                ++ (hexCenterY |> String.fromFloat)
+                                                ++ "px) scale("
                                                 ++ String.fromFloat app.scale
                                                 ++ ")"
                                             )
                                 in
-                                Just (Svg.g [ transformAttr ] [ render grid app.orientation ( point, tile ) ])
+                                Just (Svg.g [ cssTransform ] [ render grid app.orientation ( point, tile ) ])
 
                             else
                                 Nothing
